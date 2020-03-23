@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 
 from notebook.base.handlers import APIHandler
 
@@ -8,26 +9,28 @@ class DeepsearchHandler(APIHandler):
     def get(self, **kwargs):
         query = self.get_argument('query')
         # TODO: consider validating the path. don't allow dir traversal.
-        if self.get_argument('dir'):
-            directory = self.settings['contents_manager'].root_dir + "\\" + self.get_argument('dir')
-        else:
-            directory = self.settings['contents_manager'].root_dir
+        sub_dir = self.get_argument('dir').strip("/").strip("\\")  # joinpath don't like joining "c:\a" and "\b"
+        directory = Path(self.settings['contents_manager'].root_dir).joinpath(sub_dir)
         self.finish(json.dumps(self.search_in_files(query, directory)))
+
+    @staticmethod
+    def _should_exclude_dir(d):
+        return Path(d).name.startswith(".")
 
     @staticmethod
     def search_in_files(query, directory):
         total_results = 0
         results = []
-        for folder, dirs, files in os.walk(directory):
+        for folder, dirs, files in os.walk(directory, topdown=True):
+            dirs[:] = [d for d in dirs if not DeepsearchHandler._should_exclude_dir(d)]
             for file in files:
                 # TODO: Consider checking for file type (can use mimetypes.guess_type())
-                full_path = os.path.join(folder, file)
+                full_path = Path(folder).joinpath(file)
                 # Eliminate the directory from the path.
-                partial_path = full_path.rpartition(directory + "\\")[-1]
-
+                relative_path = full_path.relative_to(directory)
                 results_in_file = DeepsearchHandler.search_in_single_file(full_path, query)
                 if results_in_file:
-                    results.append({"filename": partial_path,
+                    results.append({"filename": str(relative_path),
                                     "results": results_in_file})
                     total_results += len(results_in_file)
         return {"totalResults": total_results,

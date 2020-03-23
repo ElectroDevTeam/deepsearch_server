@@ -1,7 +1,7 @@
 import setuptools
 
 setuptools.setup(
-    name="deepsearch-pkg", # Replace with your own username
+    name="jupyter_deepsearch",
     version="1",
     author="amit klein",
     author_email="amitkle001@gmail.com",

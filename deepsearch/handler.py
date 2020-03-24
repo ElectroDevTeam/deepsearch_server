@@ -1,4 +1,5 @@
 import json
+import mimetypes
 import os
 from pathlib import Path
 
@@ -18,21 +19,30 @@ class DeepsearchHandler(APIHandler):
         return Path(d).name.startswith(".")
 
     @staticmethod
+    def _should_search_in_file(file_path):
+        file_types_whitelist = ["ipynb"]
+        parts = file_path.split(".")
+        # guess_type() returns something like ("text/xml", None). Can also be (None, None).
+        mimetype = mimetypes.guess_type(file_path)[0]
+        return (mimetype and mimetype.split("/")[0] == "text") or \
+               (len(parts) > 2 and parts[-1] in file_types_whitelist)
+
+    @staticmethod
     def search_in_files(query, directory):
         total_results = 0
         results = []
         for folder, dirs, files in os.walk(directory, topdown=True):
             dirs[:] = [d for d in dirs if not DeepsearchHandler._should_exclude_dir(d)]
             for file in files:
-                # TODO: Consider checking for file type (can use mimetypes.guess_type())
-                full_path = Path(folder).joinpath(file)
-                # Eliminate the directory from the path.
-                relative_path = full_path.relative_to(directory)
-                results_in_file = DeepsearchHandler.search_in_single_file(full_path, query)
-                if results_in_file:
-                    results.append({"filename": str(relative_path),
-                                    "results": results_in_file})
-                    total_results += len(results_in_file)
+                if DeepsearchHandler._should_search_in_file(file):
+                    full_path = Path(folder).joinpath(file)
+                    # Eliminate the directory from the path.
+                    relative_path = full_path.relative_to(directory)
+                    results_in_file = DeepsearchHandler.search_in_single_file(full_path, query)
+                    if results_in_file:
+                        results.append({"filename": str(relative_path),
+                                        "results": results_in_file})
+                        total_results += len(results_in_file)
         return {"totalResults": total_results,
                 "totalFiles": len(results),
                 "results": results}
